@@ -86,5 +86,5 @@ def analyze_dataset(npz_path, m=1.0, k=10.0, sample=100000):
 
 
 if __name__ == "__main__":
-    analyze_dataset("training/train.npz", m=1.0, k=10.0)
+    analyze_dataset("oscillator/training/train.npz", m=1.0, k=10.0)
     
