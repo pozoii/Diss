@@ -5,6 +5,8 @@
     <worldbody>
         <!-- Fixed anchor -->
         <body name="mass" pos="0 0 0">
+
+            <inertial pos="0 0 0" mass="1.0" diaginertia="1e-4 1e-4 1e-4"/>
             
             <!-- 1D sliding joint along x-axis with spring -->
             <joint name="slide_x" type="slide" axis="1 0 0" stiffness="10" damping="0"/>

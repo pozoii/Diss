@@ -4,7 +4,7 @@ import os
 # -----------------------------
 # Load full dataset
 # -----------------------------
-data = np.load("oscillator/data/expert_pd_kp32_kd2.npz")
+data = np.load("oscillator/data/raw_expert_pd_kp32_kd2.npz")
 
 obs = data["obs"]
 actions = data["actions"]
