@@ -24,7 +24,7 @@ class HarmonicOscillatorEnv(gym.Env):
         # -------------------------
         # MUJOCO MODEL
         # -------------------------
-        self.model = mujoco.MjModel.from_xml_path("oscillator.xml")
+        self.model = mujoco.MjModel.from_xml_path("oscillator/oscillator.xml")
         self.data = mujoco.MjData(self.model)
 
         # -------------------------

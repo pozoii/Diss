@@ -4,7 +4,7 @@ import os
 # -----------------------------
 # Load full dataset
 # -----------------------------
-data = np.load("training/expert_pd_kp32_kd2.npz")
+data = np.load("oscillator/data/expert_pd_kp32_kd2.npz")
 
 obs = data["obs"]
 actions = data["actions"]
@@ -48,7 +48,7 @@ val_mask   = np.isin(episode_ids, list(val_eps))
 # -----------------------------
 def save_split(name, mask):
     np.savez(
-        f"training/{name}.npz",
+        f"oscillator/data/{name}.npz",
         obs=obs[mask],
         actions=actions[mask],
         next_obs=next_obs[mask],
@@ -62,4 +62,4 @@ def save_split(name, mask):
 save_split("train", train_mask)
 save_split("val", val_mask)
 
-print("\nDone. Splits saved in expert/")
+print("\nDone. Splits saved in data folder.")

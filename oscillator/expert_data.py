@@ -1,7 +1,7 @@
 
 import numpy as np
-from envs.harmonic_oscillator import HarmonicOscillatorEnv
 from tqdm import tqdm  
+from oscillator.envs.harmonic_oscillator import HarmonicOscillatorEnv
 
 def collect_expert_data(Kp=8, Kd=2, episodes=200, max_steps=500):
 
@@ -47,7 +47,7 @@ def collect_expert_data(Kp=8, Kd=2, episodes=200, max_steps=500):
 data = collect_expert_data(32,2,100000,500)
 
 np.savez(
-    "expert_pd_kp32_kd2.npz",
+    "oscillator/data/raw_expert_pd_kp32_kd2.npz",
     obs=data["obs"],
     actions=data["actions"],
     next_obs=data["next_obs"],

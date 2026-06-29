@@ -242,8 +242,8 @@ def train(model, train_loader, val_loader, lambd, epochs=20, lr=1e-3):
 
 if __name__ == "__main__":
 
-    train_ds = OscillatorDataset("training/train.npz")
-    val_ds   = OscillatorDataset("training/val.npz")
+    train_ds = OscillatorDataset("oscillator/data/train.npz")
+    val_ds   = OscillatorDataset("oscillator/data/val.npz")
 
     train_loader = DataLoader(train_ds, batch_size=64, shuffle=True, num_workers=4,pin_memory=True)
     val_loader   = DataLoader(val_ds, batch_size=64, shuffle=False, num_workers=4, pin_memory=True)
