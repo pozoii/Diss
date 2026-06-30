@@ -2,11 +2,16 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
-from training.data_preprocessing import OscillatorDataset
+from oscillator.preprocessing.data_preprocessing import OscillatorDataset
 from tqdm import tqdm
 import pandas as pd
 import wandb
 import os
+from datetime import datetime
+import argparse
+
+timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+job_id = os.environ.get("SLURM_ARRAY_TASK_ID", "local")
 os.environ["WANDB_MODE"] = "offline"
 
 class PolicyNet(nn.Module):
@@ -69,7 +74,11 @@ def pinn_loss(pred_action,true_action,x,xddot,m=1.0,k=10.0,lambd=1.0):
 
 def train(model, train_loader, val_loader, lambd, epochs=20, lr=1e-3):
 
-    wandb.init(project="diss-oscillator",config={"lr": lr,"lambda": lambd,"batch_size": 64},name=f"lambda_{lambd}",mode='offline')
+    wandb.init(project="diss-oscillator",
+               dir = "wandb", 
+               config={"lr": lr,"lambda": lambd,"batch_size": 64},
+               name=f"lambda_{lambd}_job{job_id}_{timestamp}",
+               mode='offline')
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
@@ -122,7 +131,7 @@ def train(model, train_loader, val_loader, lambd, epochs=20, lr=1e-3):
             train_loss['train_physics_loss'] += physics_loss.item()
             
 
-            if i % 1000 == 0:
+            if i % 10000 == 0:
                 print(
                     f"Epoch {epoch+1} "
                     f"Batch {i}/{len(train_loader)} "
@@ -146,11 +155,10 @@ def train(model, train_loader, val_loader, lambd, epochs=20, lr=1e-3):
         val_loss = {'val_loss':0.0,
                     'val_bc_loss':0.0,
                     'val_physics_loss':0.0,
-                    'val_physics_ratio':0.0
+                    'val_physics_ratio':0.0,
                     }
 
         with torch.no_grad():
-
             for batch in val_loader:
 
                 obs = batch["obs"].to(device,non_blocking=True)
@@ -171,12 +179,12 @@ def train(model, train_loader, val_loader, lambd, epochs=20, lr=1e-3):
                 pred = model(model_input)
 
                 loss, bc_loss, physics_loss = pinn_loss(pred_action=pred,true_action=action, x = x, xddot = xdotdot, lambd = lambd)
-                data_loss = nn.functional.mse_loss(pred, action)
+                
 
                 val_loss['val_loss'] += loss.item()
                 val_loss['val_bc_loss'] += bc_loss.item()
                 val_loss['val_physics_loss'] += physics_loss.item()
-                val_loss['val_data_loss'] += data_loss.item()
+                
 
 
         for k in val_loss:
@@ -188,7 +196,6 @@ def train(model, train_loader, val_loader, lambd, epochs=20, lr=1e-3):
             "val/loss": val_loss["val_loss"],
             "val/bc_loss": val_loss["val_bc_loss"],
             "val/physics_loss": val_loss["val_physics_loss"],
-            "val/data_loss": val_loss["val_data_loss"],
             "val/physics_ratio": val_loss["val_physics_ratio"],
             "epoch": epoch
             })
@@ -203,7 +210,6 @@ def train(model, train_loader, val_loader, lambd, epochs=20, lr=1e-3):
                 "val_loss": val_loss["val_loss"],
                 "val_bc_loss": val_loss["val_bc_loss"],
                 "val_physics_loss": val_loss["val_physics_loss"],
-                "val_data_loss": val_loss["val_data_loss"],
                 "val_physics_ratio": val_loss["val_physics_ratio"]
             })
 
@@ -211,7 +217,6 @@ def train(model, train_loader, val_loader, lambd, epochs=20, lr=1e-3):
             f"Epoch {epoch+1}/{epochs} | "
             f"Train: {train_loss['train_loss']:.6f} "
             f"Val: {val_loss['val_loss']:.6f} "
-            f"Val data loss: {val_loss['val_data_loss']:.6f} "
             )
 
         if val_loss["val_loss"] < best_val_loss:
@@ -223,7 +228,7 @@ def train(model, train_loader, val_loader, lambd, epochs=20, lr=1e-3):
                 "epoch": epoch+1,
                 "val_loss": val_loss,
                 "lambda":lambd
-            }, f"models/lambda={lambd}.pt")
+            }, f"oscillator/models/lambda={lambd}_{timestamp}.pt")
 
         stop = early_stopper.step(val_loss["val_loss"])
 
@@ -232,11 +237,11 @@ def train(model, train_loader, val_loader, lambd, epochs=20, lr=1e-3):
             break
 
     artifact = wandb.Artifact(f"model_lambda_{lambd}",type="model")
-    artifact.add_file(f"models/lambda={lambd}.pt")
+    artifact.add_file(f"oscillator/models/lambda={lambd}.pt")
     wandb.log_artifact(artifact)
 
     df = pd.DataFrame(history)
-    df.to_csv(f"training_logs/training_log_lambda={lambd}.csv", index=False)
+    df.to_csv(f"oscillator/training_logs/training_log_lambda={lambd}.csv", index=False)
     wandb.finish()
     
 
@@ -249,6 +254,11 @@ if __name__ == "__main__":
     val_loader   = DataLoader(val_ds, batch_size=64, shuffle=False, num_workers=4, pin_memory=True)
 
     model = PolicyNet()
-    for lambd in [0.0, 0.1, 0.5, 1.0, 2.0]:
-        model = PolicyNet()
-        train(model = model, train_loader=train_loader, val_loader=val_loader, lambd=lambd, epochs=20, lr=1e-3)
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--lambda_", type=float)
+    args = parser.parse_args()
+
+    lambd = args.lambda_
+    train(model, train_loader, val_loader, lambd=lambd)
+    
