@@ -7,6 +7,7 @@ from sklearn.metrics import mean_squared_error, r2_score
 from envs.harmonic_oscillator import HarmonicOscillatorEnv
 from train import PolicyNet
 
+# to retrieve trained models, run in the terminal: wandb artifact get <name of model> --root <path to save the model>
 def load_policy(checkpoint_path="best_model.pt", device=None):
 
     if device is None:

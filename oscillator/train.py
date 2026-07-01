@@ -10,7 +10,7 @@ import os
 from datetime import datetime
 import argparse
 
-timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+timestamp = datetime.now().strftime("%Y_%m_%d_%H_%M_")
 job_id = os.environ.get("SLURM_ARRAY_TASK_ID", "local")
 os.environ["WANDB_MODE"] = "offline"
 
@@ -75,9 +75,8 @@ def pinn_loss(pred_action,true_action,x,xddot,m=1.0,k=10.0,lambd=1.0):
 def train(model, train_loader, val_loader, lambd, epochs=20, lr=1e-3):
 
     wandb.init(project="diss-oscillator",
-               dir = "wandb", 
                config={"lr": lr,"lambda": lambd,"batch_size": 64},
-               name=f"lambda_{lambd}_job{job_id}_{timestamp}",
+               name=f"{timestamp}_lambda_{lambd}_job{job_id}",
                mode='offline')
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -228,7 +227,7 @@ def train(model, train_loader, val_loader, lambd, epochs=20, lr=1e-3):
                 "epoch": epoch+1,
                 "val_loss": val_loss,
                 "lambda":lambd
-            }, f"oscillator/models/lambda={lambd}_{timestamp}.pt")
+            }, f"oscillator/models/{timestamp}_lambda={lambd}.pt")
 
         stop = early_stopper.step(val_loss["val_loss"])
 
@@ -237,11 +236,11 @@ def train(model, train_loader, val_loader, lambd, epochs=20, lr=1e-3):
             break
 
     artifact = wandb.Artifact(f"model_lambda_{lambd}",type="model")
-    artifact.add_file(f"oscillator/models/lambda={lambd}.pt")
+    artifact.add_file(f"oscillator/models/{timestamp}_lambda={lambd}.pt")
     wandb.log_artifact(artifact)
 
     df = pd.DataFrame(history)
-    df.to_csv(f"oscillator/training_logs/training_log_lambda={lambd}.csv", index=False)
+    df.to_csv(f"oscillator/training_logs/training_log_{timestamp}_lambda={lambd}.csv", index=False)
     wandb.finish()
     
 
@@ -250,8 +249,8 @@ if __name__ == "__main__":
     train_ds = OscillatorDataset("oscillator/data/train.npz")
     val_ds   = OscillatorDataset("oscillator/data/val.npz")
 
-    train_loader = DataLoader(train_ds, batch_size=64, shuffle=True, num_workers=4,pin_memory=True)
-    val_loader   = DataLoader(val_ds, batch_size=64, shuffle=False, num_workers=4, pin_memory=True)
+    train_loader = DataLoader(train_ds, batch_size=64, shuffle=True, num_workers=2,pin_memory=True)
+    val_loader   = DataLoader(val_ds, batch_size=64, shuffle=False, num_workers=2, pin_memory=True)
 
     model = PolicyNet()
 
