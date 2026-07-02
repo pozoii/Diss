@@ -2,10 +2,27 @@ import numpy as np
 import pandas as pd
 import torch
 from tqdm import tqdm
+import os
+import glob
 from sklearn.metrics import mean_squared_error, r2_score
+from oscillator.envs.harmonic_oscillator import HarmonicOscillatorEnv
+from oscillator.train import PolicyNet
+from datetime import datetime
 
-from envs.harmonic_oscillator import HarmonicOscillatorEnv
-from train import PolicyNet
+timestamp = datetime.now().strftime("%Y_%m_%d_%H_%M_")
+
+def init_configs(n_eps,p_range=1, v_range=0.5, seed=42):
+    rng = np.random.default_rng(seed)
+
+    inits = []
+    for _ in range(n_eps):
+        inits.append({
+            "pos": rng.uniform(-p_range, p_range),
+            "vel": rng.uniform(-v_range, v_range),
+        })
+
+    return inits
+
 
 # to retrieve trained models, run in the terminal: wandb artifact get <name of model> --root <path to save the model>
 def load_policy(checkpoint_path="best_model.pt", device=None):
@@ -22,13 +39,13 @@ def load_policy(checkpoint_path="best_model.pt", device=None):
 
     return model, device
 
-def evaluate_controller(env,policy_fn,episodes=100,max_steps=500,):
+def evaluate_controller(env,policy_fn,init_configs,max_steps=500,):
 
     results = []
 
-    for _ in tqdm(range(episodes), desc="Evaluating"):
+    for ini in tqdm(init_configs, desc="Evaluating"):
 
-        obs, info = env.reset()
+        obs, info = env.reset(options={"ini": ini})
         target = info["target"]
 
         errors = []
@@ -68,7 +85,7 @@ def pd_policy(Kp, Kd):
     @torch.no_grad()
     def policy(obs, target):
 
-        x, xdot = obs
+        x, xdot, xddot = obs
 
         u = Kp * (target - x) - Kd * xdot
 
@@ -81,7 +98,7 @@ def nn_policy(model, device):
     @torch.no_grad()
     def policy(obs, target):
 
-        x, xdot = obs
+        x, xdot, xddot = obs
 
         e = target - x
 
@@ -92,15 +109,53 @@ def nn_policy(model, device):
         return u.astype(np.float32)
 
     return policy
-    
-model, device = load_policy("training/best_model.pt")
+
+all_results = []
+
+model_dir = "oscillator/models"
 
 env = HarmonicOscillatorEnv(render_mode=None)
 
-pd_results = evaluate_controller(env, pd_policy(32, 2),episodes=1000)
+inits = init_configs(10000,p_range=1, v_range=0.5)
 
-nn_results = evaluate_controller(env,nn_policy(model, device),episodes=1000)
+pd_results = evaluate_controller(env, pd_policy(32, 2), init_configs= inits)
 
-comparison = pd.DataFrame({"PD": pd_results.mean(),"NN": nn_results.mean(),})
+pd_results = {
+            "model": "Expert PD",
+            "mse": [pd_results["mse"].mean()],
+            "settling_time": [pd_results["settling_time"].mean()],
+            "control_cost": [pd_results["control_cost"].mean()],    
+            "success": [pd_results["success"].mean()],
+            }
 
-print(comparison)
+print(f"\n===== Evaluation Results for Expert PD =====")
+print(pd_results)
+
+all_results.append(pd_results)
+
+for model_path in glob.glob(os.path.join(model_dir, "*.pt")):
+
+    model, device = load_policy(model_path)
+
+    model_name = os.path.basename(model_path)
+
+    env = HarmonicOscillatorEnv(render_mode=None)
+
+    nn_results = evaluate_controller(env,nn_policy(model, device), init_configs= inits)
+
+    nn_results = {
+            "model": [model_name],
+            "mse": [nn_results["mse"].mean()],
+            "settling_time": [nn_results["settling_time"].mean()],
+            "control_cost": [nn_results["control_cost"].mean()],
+            "success": [nn_results["success"].mean()],
+        }
+
+    print(f"\n===== Evaluation Results for {model_name} =====")
+    print(nn_results)
+
+    all_results.append(nn_results)
+
+df = pd.DataFrame(all_results)
+output_path = f"oscillator/results/eval_results_{timestamp}.csv"
+df.to_csv(output_path, index=False)

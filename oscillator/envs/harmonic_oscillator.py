@@ -39,11 +39,11 @@ class HarmonicOscillatorEnv(gym.Env):
             dtype=np.float32
         )
 
-        # observation = [x, x_dot]
+        # observation = [x, x_dot, xddot]
         self.observation_space = spaces.Box(
             low=-np.inf,
             high=np.inf,
-            shape=(2,),
+            shape=(3,),
             dtype=np.float32
         )
 
@@ -77,6 +77,7 @@ class HarmonicOscillatorEnv(gym.Env):
     # =====================================================
 
     def reset(self, seed=None, options=None):
+
         super().reset(seed=seed)
         
         mujoco.mj_resetData(self.model, self.data)
@@ -84,11 +85,19 @@ class HarmonicOscillatorEnv(gym.Env):
         self.step_count = 0
         self.stable_steps = 0
 
-        # random initial condition (like random agent position)
-        self.data.qpos[0] = self.np_random.uniform(-1.0, 1.0)
-        self.data.qvel[0] = self.np_random.uniform(-0.5, 0.5)
+        ini = None
+        if options is not None:
+            ini = options.get("ini", None)
 
-        self.target = 0.0
+        if ini is not None:
+            self.data.qpos[0] = ini.get("pos",0.0)
+            self.data.qvel[0] = ini.get("vel",0.0)
+        else:
+            # random initial condition (like random agent position)
+            self.data.qpos[0] = self.np_random.uniform(-1.0, 1.0)
+            self.data.qvel[0] = self.np_random.uniform(-0.5, 0.5)
+            mujoco.mj_forward(self.model, self.data)
+
         obs = self._get_obs()
 
     
