@@ -2,7 +2,7 @@ import re
 import pandas as pd
 import matplotlib.pyplot as plt
 
-csv_file= 'eval_results_2026_07_02_17_01_.csv'
+csv_file= 'eval_results_2026_07_03_12_01_.csv'
 
 df = pd.read_csv(f"oscillator/results/{csv_file}")
 
@@ -25,12 +25,11 @@ def extract_lambda(name):
     if name == "Expert PD":
         return None
 
-    match = re.search(r"lambda=([0-9.]+)", name)
+    match = re.search(r"lambda[_=](\d+(?:\.\d+)?)", name)
+    if not match:
+        raise ValueError(f"No lambda found in: {name}")
 
-    if match:
-        return float(match.group(1))
-
-    return None
+    return float(match.group(1))
 
 
 df["lambda"] = df["model"].apply(extract_lambda)

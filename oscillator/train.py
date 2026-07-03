@@ -64,7 +64,8 @@ def pinn_loss(pred_action,true_action,x,xddot,m=1.0,k=10.0,lambd=1.0):
     pred_action = pred_action.view(-1)
 
     # Physics residual
-    residual = m * xddot + k * x - pred_action
+    # old and bad residual: residual = m * xddot + k * x - pred_action
+    residual = xddot - (pred_action - k * x) / m
 
     physics_loss = torch.mean(residual**2)
 
