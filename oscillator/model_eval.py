@@ -4,7 +4,6 @@ import torch
 from tqdm import tqdm
 import os
 import glob
-from sklearn.metrics import mean_squared_error, r2_score
 from oscillator.envs.harmonic_oscillator import HarmonicOscillatorEnv
 from oscillator.train import PolicyNet
 from datetime import datetime
