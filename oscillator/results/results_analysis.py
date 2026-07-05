@@ -1,10 +1,11 @@
 import re
 import pandas as pd
 import matplotlib.pyplot as plt
+import sys
 
-csv_file= 'eval_results_2026_07_03_12_01_.csv'
-
-df = pd.read_csv(f"oscillator/results/{csv_file}")
+csv_file = sys.argv[1]
+#csv_file = "oscillator/results/eval_results_2026_07_03_12_01_.csv"
+df = pd.read_csv(csv_file)
 
 for col in ["mse", "settling_time", "control_cost", "success"]:
     df[col] = (

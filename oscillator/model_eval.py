@@ -158,3 +158,5 @@ for model_path in glob.glob(os.path.join(model_dir, "*.pt")):
 df = pd.DataFrame(all_results)
 output_path = f"oscillator/results/eval_results_{timestamp}.csv"
 df.to_csv(output_path, index=False)
+
+print(output_path)
