@@ -1,0 +1,37 @@
+<mujoco model="ball_on_plate">
+
+  <option gravity="0 0 -9.81" timestep="0.002"/>
+
+  <worldbody>
+
+    <!-- Fixed base -->
+    <body name="base" pos="0 0 0">
+      <geom type="box" size="0.2 0.2 0.02" rgba="0.3 0.3 0.3 1"/>
+
+      <!-- Roll joint (around y-axis) -->
+      <body name="gimbal_roll" pos="0 0 0.02">
+        <joint name="roll" type="hinge" axis="0 1 0" damping="0.1"/>
+
+        <!-- Pitch joint (around x-axis) -->
+        <body name="gimbal_pitch" pos="0 0 0">
+          <joint name="pitch" type="hinge" axis="1 0 0" damping="0.1"/>
+
+          <!-- Plate -->
+          <geom name="plate"
+                type="box"
+                size="0.25 0.25 0.01"
+                rgba="0.6 0.6 0.9 1"
+                friction="1 0.005 0.0001"/>
+        </body>
+      </body>
+    </body>
+
+  </worldbody>
+
+  <actuator>
+    <!-- torque control -->
+    <motor joint="roll" gear="10"/>
+    <motor joint="pitch" gear="10"/>
+  </actuator>
+
+</mujoco>
