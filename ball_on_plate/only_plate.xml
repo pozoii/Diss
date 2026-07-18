@@ -1,4 +1,4 @@
-<mujoco model="ball_on_plate">
+<mujoco model="only_plate">
 
     <option timestep="0.002" gravity="0 0 -9.81"/>
 
@@ -21,8 +21,6 @@
                 <joint name="roll"
                        type="hinge"
                        axis="0 -1 0"
-                       range="-30 30" 
-                       limited="true"
                        damping="0.05"/>
 
                 <!-- ========================= -->
@@ -36,8 +34,6 @@
                     <joint name="pitch"
                            type="hinge"
                            axis="1 0 0"
-                           range="-30 30" 
-                           limited="true"
                            damping="0.05"/>
 
                     <!-- ========================= -->
@@ -47,8 +43,8 @@
 
                         <geom name="plate"
                               type="box"
-                              size="0.25 0.25 0.025"
-                              mass="10.0"
+                              size="1 1 0.025"
+                              mass="2.0"
                               rgba="0.3 0.5 0.9 1"
                               friction="1.0 0.01 0.001"/>
 
@@ -63,7 +59,7 @@
         <!-- ========================= -->
         <!-- BALL (WORLD FRAME) -->
         <!-- ========================= -->
-        <body name="ball" pos="0 0 0.25">
+        <body name="ball" pos="10 10 0.25">
 
             <freejoint name="ball_joint"/>
 
@@ -81,7 +77,6 @@
         </body>
 
     </worldbody>
-
     <!-- ========================= -->
     <!-- ACTUATION -->
     <!-- ========================= -->
