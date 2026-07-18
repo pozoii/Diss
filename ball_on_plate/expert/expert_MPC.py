@@ -1,17 +1,16 @@
 import numpy as np
 from ball_on_plate.env.ball_on_plate import BallOnPlateEnv
 import pandas as pd
+import mujoco
 from joblib import load
-from tqdm import tqdm
-
-
-
+import time
 
 class ExpertMPC:
     def __init__(self, env, plate_models, H=10, max_torque=10, plate_joint_limit=np.deg2rad(30), max_iters=10, x_target = np.zeros(8)):
 
         self.H = H  # Horizon length
-        self.dt= env.dt
+        #self.dt= env.dt
+        self.dt= 0.02
         self.plate_models = plate_models
         self.max_torque = max_torque
         self.plate_joint_limit = plate_joint_limit
@@ -20,7 +19,7 @@ class ExpertMPC:
 
         # Q, R from provided cost function parameters
 
-        self.Q = np.diag([10,10, 2, 2, 1,1,0,0])
+        self.Q = np.diag([25,25, 4, 4, 1,1,0,0])
         self.R = np.diag([0.1,0.1])
 
 
@@ -95,41 +94,28 @@ class ExpertMPC:
         # betadd = b + ap[0]*tau + ap[1]*beta + ap[2]*betad
 
         A = np.eye(8)
-
-        # --------------------------------------------------
         # Ball
-        # --------------------------------------------------
-
         # x
         A[0,2] += dt
         A[0,4] += -C * dt**2
-
         # y
         A[1,3] += dt
         A[1,5] += -C * dt**2
-
         # xdot
         A[2,4] += -C * dt
-
         # ydot
         A[3,5] += -C * dt
 
-        # --------------------------------------------------
         # Plate
-        # --------------------------------------------------
-
         # alpha
         A[4,4] += ar[1] * dt**2
         A[4,6] += dt + ar[2] * dt**2
-
         # beta
         A[5,5] += ap[1] * dt**2
         A[5,7] += dt + ap[2] * dt**2
-
         # alphadot
         A[6,4] += ar[1] * dt
         A[6,6] += ar[2] * dt
-
         # betadot
         A[7,5] += ap[1] * dt
         A[7,7] += ap[2] * dt
@@ -143,7 +129,6 @@ class ExpertMPC:
         # roll torque
         B[4,0] = ar[0] * dt**2
         B[6,0] = ar[0] * dt
-
         # pitch torque
         B[5,1] = ap[0] * dt**2
         B[7,1] = ap[0] * dt
@@ -188,8 +173,10 @@ class ExpertMPC:
                 Qux= lux + np.transpose(B) @ Vxx @ A
 
                 #control gains
-                ks[t] = - np.linalg.inv(Quu) @ Qu
-                Ks[t] = - np.linalg.inv(Quu) @ Qux
+                reg = 1e-6
+                Quu_reg = Quu + reg*np.eye(2)
+                ks[t] = - np.linalg.inv(Quu_reg) @ Qu
+                Ks[t] = - np.linalg.inv(Quu_reg) @ Qux
 
                 #value function update
                 Vx = Qx - np.transpose(Qux) @ np.linalg.inv(Quu) @ Qu
@@ -209,9 +196,11 @@ class ExpertMPC:
                 for t in (range(self.H)):
                     U_new[t] = np.clip(U[t] + alpha * ks[t] + Ks[t] @ (X_new[t] - X[t]), -self.max_torque, self.max_torque)
                     X_new[t+1] = self.predict_next_state(X_new[t], U_new[t])
-                    J += np.transpose(X_new[t]) @ self.Q @ X_new[t] + np.transpose(U_new[t]) @ self.R @ U_new[t] 
+                    dx = X_new[t] - self.x_target
+                    J += dx.T @ self.Q @ dx + U_new[t].T @ self.R @ U_new[t]
 
-                J += X_new[self.H].T @ self.Q @ X_new[self.H]
+                dx = X_new[self.H] - self.x_target
+                J += dx.T @ self.Q @ dx
     
                 if J < best:
                     best = J
@@ -226,7 +215,7 @@ class ExpertMPC:
 
     def reset(self):
         """Reset the warm start buffer for a new episode"""
-        self.U_guess = np.zeros((self.H, 1))
+        self.U_guess = np.random.uniform(-1,1,(self.H,2))
     
     def control(self, state):
         """MPC interface: solve and shift"""
@@ -243,10 +232,9 @@ class ExpertMPC:
         
         return action
 
-def run_ExpertMPC(episodes=1000,max_steps=5000, H=30):
+def run_ExpertMPC(episodes=1000,max_steps=5000, H=30, sim = False):
 
-
-        env = BallOnPlateEnv(render_mode='human')
+        env = BallOnPlateEnv(render_mode= None)
 
         models = load("ball_on_plate/dynamics/plate_models.joblib")
 
@@ -256,18 +244,30 @@ def run_ExpertMPC(episodes=1000,max_steps=5000, H=30):
 
         records =[]
 
-        for ep in tqdm(range(episodes), desc="Collecting expert episodes"):
+        for ep in range(episodes):
+            print(f'ep:{ep}')
+
+            qpos_history=[]
+            qvel_history=[]
+            actions=[]
 
             obs, info = env.reset()
 
             expert.reset()
 
             for step in range(max_steps):
+                if step % 100 ==0:
+                    print(f'step:{step}')
 
                 action = expert.control(obs)
 
+
                 next_obs, reward, terminated, truncated, info = env.step(action)
-                env.render()
+
+                qpos_history.append(env.data.qpos.copy())
+                qvel_history.append(env.data.qvel.copy())
+                actions.append(action.copy())
+                #env.render()
 
                 records.append({
 
@@ -306,6 +306,22 @@ def run_ExpertMPC(episodes=1000,max_steps=5000, H=30):
 
                 if terminated or truncated or info.get("ball_lost", False):
                     break
+            if sim:
+            
+                viewer = mujoco.viewer.launch_passive(env.model, env.data)
+
+                for qpos, qvel in zip(qpos_history, qvel_history):
+
+                    # set simulator state
+                    env.data.qpos[:] = qpos
+                    env.data.qvel[:] = qvel
+
+                    mujoco.mj_forward(env.model, env.data)
+
+                    viewer.sync()
+                    time.sleep(0.005)
+
+            viewer.close()
 
         env.close()
 
@@ -316,7 +332,10 @@ def run_ExpertMPC(episodes=1000,max_steps=5000, H=30):
     
 
 
+#tech mech meca moca mock lock look loop poop
+#tech mech mesh mosh posh 
 
 
-    
+
+  
         
