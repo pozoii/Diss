@@ -261,4 +261,3 @@ if __name__ == "__main__":
 
     lambd = args.lambda_
     train(model, train_loader, val_loader, lambd=lambd)
-    
