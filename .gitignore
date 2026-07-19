@@ -194,6 +194,7 @@ logs/
 .DS_Store
 
 oscillator/sh_scripts/
+ball_on_plate/sh_scripts
 *.sh
 wandb/
 
