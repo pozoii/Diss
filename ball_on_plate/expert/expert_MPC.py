@@ -321,7 +321,8 @@ def run_ExpertMPC(episodes=1000,max_steps=5000, H=30, sim = False):
                     viewer.sync()
                     time.sleep(0.005)
 
-            viewer.close()
+            if sim:
+                viewer.close()
 
         env.close()
 
@@ -330,10 +331,6 @@ def run_ExpertMPC(episodes=1000,max_steps=5000, H=30, sim = False):
 
 
     
-
-
-#tech mech meca moca mock lock look loop poop
-#tech mech mesh mosh posh 
 
 
 
