@@ -1,7 +1,7 @@
 
 import numpy as np
 import pandas as pd
-from ball_on_plate.env.ball_on_plate import BallOnPlateEnv
+from ball_on_plate.envs.ball_on_plate import BallOnPlateEnv
 from sklearn.linear_model import LinearRegression
 import matplotlib.pyplot as plt
 from joblib import dump

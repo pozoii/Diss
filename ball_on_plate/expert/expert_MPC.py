@@ -1,5 +1,5 @@
 import numpy as np
-from ball_on_plate.env.ball_on_plate import BallOnPlateEnv
+from ball_on_plate.envs.ball_on_plate import BallOnPlateEnv
 import pandas as pd
 import mujoco
 from joblib import load
