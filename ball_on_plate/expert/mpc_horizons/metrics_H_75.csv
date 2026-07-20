@@ -1,0 +1,2 @@
+mean_position_error,max_position_error,mean_torque,control_cost,mean_episode_length,failure_rate,mean_settling_time,computation_time_per1000,H
+0.012425023,0.2511503,0.006203273877497046,1107.0781999533226,5000.0,1.0,1.2399200000000001,718.6114443241768,75
