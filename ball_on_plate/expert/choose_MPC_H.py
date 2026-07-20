@@ -72,6 +72,7 @@ def analyze_performance_and_time(df, target=np.array([0.0,0.0]),settling_thresho
 
 def main():
     Hs = [1,2,5,10,20,30,50,75,100,150,250,500]
+    Hs= [100]
     if len(sys.argv) > 1:
         idx = int(sys.argv[1])
     else:
@@ -82,7 +83,7 @@ def main():
 
     start_time = time.perf_counter()
 
-    df = run_ExpertMPC(H=H,episodes=25,max_steps=5000)
+    df = run_ExpertMPC(H=H,episodes=5,max_steps=5000)
 
     total_time = time.perf_counter() - start_time
     df["computation_time"] = total_time
