@@ -232,6 +232,21 @@ class ExpertMPC:
         
         return action
 
+def replay_trajectory(env, qpos_history, qvel_history, dt=0.005):
+
+                    viewer = mujoco.viewer.launch_passive(env.model, env.data)
+
+                    for qpos, qvel in zip(qpos_history, qvel_history):
+
+                        env.data.qpos[:] = qpos
+                        env.data.qvel[:] = qvel
+
+                        mujoco.mj_forward(env.model, env.data)
+
+                        viewer.sync()
+                        time.sleep(dt)
+
+                    viewer.close()
 def run_ExpertMPC(episodes=1000,max_steps=5000, H=30, sim = False):
 
         env = BallOnPlateEnv(render_mode= None)
@@ -307,22 +322,10 @@ def run_ExpertMPC(episodes=1000,max_steps=5000, H=30, sim = False):
                 if terminated or truncated or info.get("ball_lost", False):
                     break
             if sim:
-            
-                viewer = mujoco.viewer.launch_passive(env.model, env.data)
-
-                for qpos, qvel in zip(qpos_history, qvel_history):
-
-                    # set simulator state
-                    env.data.qpos[:] = qpos
-                    env.data.qvel[:] = qvel
-
-                    mujoco.mj_forward(env.model, env.data)
-
-                    viewer.sync()
-                    time.sleep(0.005)
-
-            if sim:
-                viewer.close()
+                 if ep < episodes - 1:
+                    input("Press Enter for next episode...")
+                    
+                 replay_trajectory(env, qpos_history, qvel_history)
 
         env.close()
 
@@ -333,6 +336,11 @@ def run_ExpertMPC(episodes=1000,max_steps=5000, H=30, sim = False):
     
 
 
-
+run_ExpertMPC(
+    episodes=5,
+    max_steps=5000,
+    H=30,
+    sim=True,
+)
   
         
