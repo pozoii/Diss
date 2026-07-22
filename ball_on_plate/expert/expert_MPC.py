@@ -328,23 +328,12 @@ def run_ExpertMPC(episodes=1000,max_steps=5000, H=30, sim = False):
             if sim:
                  if ep < episodes - 1:
                     input("Press Enter for next episode...")
-                    
+
                  replay_trajectory(env, qpos_history, qvel_history)
 
         env.close()
 
         return pd.DataFrame(records)
 
-
-
-    
-
-
-run_ExpertMPC(
-    episodes=5,
-    max_steps=5000,
-    H=30,
-    sim=True,
-)
   
         
