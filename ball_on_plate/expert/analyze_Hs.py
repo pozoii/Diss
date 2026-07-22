@@ -173,59 +173,6 @@ plt.tight_layout()
 plt.savefig(os.path.join(FIG_DIR, "pareto.png"), dpi=300)
 plt.close()
 
-# ---------------------------------------------------
-# Trajectory comparison
-# ---------------------------------------------------
-
-trajectory_files = sorted(glob.glob(os.path.join(METRICS_DIR, "H_*.csv")))
-
-plt.figure(figsize=(8,5))
-
-for f in trajectory_files:
-
-    df = pd.read_csv(f)
-
-    ep0 = df[df["episode"] == 0]
-
-    error = np.sqrt(ep0["x"]**2 + ep0["y"]**2)
-
-    plt.plot(error.values, label=f"H={int(ep0['H'].iloc[0])}")
-
-plt.xlabel("Step")
-plt.ylabel("Radial error (m)")
-plt.legend(ncol=2)
-plt.grid(True)
-
-plt.tight_layout()
-plt.savefig(os.path.join(FIG_DIR, "trajectory_error.png"), dpi=300)
-plt.close()
-
-
-# ---------------------------------------------------
-# Control comparison
-# ---------------------------------------------------
-
-plt.figure(figsize=(8,5))
-
-for f in trajectory_files:
-
-    df = pd.read_csv(f)
-
-    ep0 = df[df["episode"] == 0]
-
-    torque = np.sqrt(ep0["roll_torque"]**2 +ep0["pitch_torque"]**2)
-
-    plt.plot(torque.values, label=f"H={int(ep0['H'].iloc[0])}")
-
-plt.xlabel("Step")
-plt.ylabel("Torque magnitude")
-plt.legend(ncol=2)
-plt.grid(True)
-
-plt.tight_layout()
-plt.savefig(os.path.join(FIG_DIR, "torque.png"), dpi=300)
-plt.close()
-
 
 # ---------------------------------------------------
 # Print best horizons

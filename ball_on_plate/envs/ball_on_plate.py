@@ -7,7 +7,7 @@ import mujoco
 class BallOnPlateEnv(gym.Env):
     metadata = {"render_modes": ["human"], "render_fps": 60}
 
-    def __init__(self, render_mode=None, target=np.array([0.0, 0.0], dtype=np.float32), ball=True):
+    def __init__(self, render_mode=None, target=np.array([0.0, 0.0], dtype=np.float32), ball=True, max_pos_reset=0.2, max_vel_reset=0.5, stable_pos_thresh=0.02 ,stable_vel_thresh=0.02, settling_window=50):
         
         super().__init__()
 
@@ -16,11 +16,18 @@ class BallOnPlateEnv(gym.Env):
 
         self.max_steps = 5000
         self.step_count = 0
+        self.stable_steps = 0
 
         self.joints = {}
         self.geoms = {}
         self.prev_vel = np.zeros(2, dtype=np.float32)
         self.finite_diff_acc = np.zeros(2, dtype=np.float32)
+
+        self.max_pos_reset = max_pos_reset
+        self.max_vel_reset = max_vel_reset
+        self.stable_pos_thresh = stable_pos_thresh
+        self.stable_vel_thresh = stable_vel_thresh
+        self.settling_window = settling_window
 
 
         # -------------------------
@@ -68,6 +75,7 @@ class BallOnPlateEnv(gym.Env):
         self.plate_size = self.geoms['plate']['size']
         self.ball_radius = self.geoms['ball_geom']['size'][0]
         self.ball_lost = False
+        self.ball_stable = False
 
         # ----------------
         # SPACES 
@@ -100,14 +108,25 @@ class BallOnPlateEnv(gym.Env):
     # =====================================================
     # Check if the ball fell off the plate
     # =====================================================
-    def _ball_fell_off(self):
+    def _ball_fell_off(self,obs):
 
-        ball_qpos = self.joints["ball_joint"]["qposadr"]
-        x, y = self.data.qpos[ball_qpos], self.data.qpos[ball_qpos + 1]
+        x, y = obs[0], obs[1]
+
         x_limit = self.plate_size[0] - self.ball_radius
         y_limit = self.plate_size[1] - self.ball_radius
 
         return (abs(x) > x_limit or abs(y) > y_limit)
+    
+    def _ball_stabilised(self,obs):
+
+        target = self.target
+
+        x, y, xdot, ydot = obs[0], obs[1], obs[2], obs[3]
+        pos_err = np.linalg.norm(np.array([x,y])-target)
+        vel_err = np.linalg.norm(np.array([xdot,ydot]))
+
+        return (pos_err < self.stable_pos_thresh and vel_err < self.stable_vel_thresh)
+    
     # =====================================================
     # OBS + INFO (same role as GridWorld)
     # =====================================================
@@ -133,9 +152,11 @@ class BallOnPlateEnv(gym.Env):
 
     def _get_info(self):
         return {
-            "xddot": (self.finite_diff_acc[0]),
-            "yddot": (self.finite_diff_acc[1]),
+            "xddot": self.finite_diff_acc[0],
+            "yddot": self.finite_diff_acc[1],
             "ball_lost": self.ball_lost,
+            "ball_stable": self.ball_stable,
+            "ball_stable_concat": self.stable_steps,
             "target": self.target,
             "step": self.step_count,
             }
@@ -151,6 +172,7 @@ class BallOnPlateEnv(gym.Env):
         mujoco.mj_resetData(self.model, self.data)
 
         self.step_count = 0
+        self.stable_steps = 0
 
         ini = None
         if options is not None:
@@ -176,12 +198,12 @@ class BallOnPlateEnv(gym.Env):
         else:
 
             # Random ball position on the plate
-            self.data.qpos[ball_qpos] = self.np_random.uniform(-0.15, 0.15)
-            self.data.qpos[ball_qpos + 1] = self.np_random.uniform(-0.15, 0.15)
+            self.data.qpos[ball_qpos] = self.np_random.uniform(-self.max_pos_reset, self.max_pos_reset)
+            self.data.qpos[ball_qpos + 1] = self.np_random.uniform(-self.max_pos_reset, self.max_pos_reset)
 
             # Random ball velocity
-            self.data.qvel[ball_qvel] = self.np_random.uniform(-0.5, 0.5)
-            self.data.qvel[ball_qvel + 1] = self.np_random.uniform(-0.5, 0.5)
+            self.data.qvel[ball_qvel] = self.np_random.uniform(-self.max_vel_reset, self.max_vel_reset)
+            self.data.qvel[ball_qvel + 1] = self.np_random.uniform(-self.max_vel_reset, self.max_vel_reset)
 
         
         mujoco.mj_forward(self.model, self.data)
@@ -191,6 +213,7 @@ class BallOnPlateEnv(gym.Env):
         self.prev_vel[:] = obs[2:4]
         self.finite_diff_acc[:] = 0.0
         self.ball_lost = False
+        self.ball_stable = False
 
         info = self._get_info()
 
@@ -218,7 +241,14 @@ class BallOnPlateEnv(gym.Env):
 
         obs = self._get_obs()
 
-        self.ball_lost = self._ball_fell_off()
+        self.ball_lost = self._ball_fell_off(obs)
+        self.ball_stable = self._ball_stabilised(obs)
+
+        if self.ball_stable:
+            self.stable_steps += 1
+        else:
+            self.stable_steps = 0
+
         # reward
         reward = 0
 
@@ -229,17 +259,15 @@ class BallOnPlateEnv(gym.Env):
         self.finite_diff_acc[0] = (xdot - self.prev_vel[0]) / self.dt
         self.finite_diff_acc[1] = (ydot - self.prev_vel[1]) / self.dt
 
-        p_error = np.linalg.norm(np.array([x, y]) - self.target)
-        v_error = np.linalg.norm(np.array([xdot, ydot]))
 
         info = self._get_info()
 
        
-        terminated =  self.ball_lost
-        truncated = self.step_count >= self.max_steps
+        terminated = self.step_count >= self.max_steps 
+        truncated = self.ball_lost or self.stable_steps >= self.settling_window
         
 
-        return obs, reward,terminated, truncated, info
+        return obs, reward, terminated, truncated, info
 
     # =====================================================
     # RENDER (analogous to pygame render)

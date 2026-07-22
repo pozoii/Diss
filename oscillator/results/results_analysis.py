@@ -3,11 +3,12 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import sys
 
-csv_file = sys.argv[1]
+#csv_file = sys.argv[1]
 #csv_file = "oscillator/results/eval_results_2026_07_03_12_01_.csv"
+csv_file = "oscillator/results/your_file_with_non_mean_mse.csv"
 df = pd.read_csv(csv_file)
 
-for col in ["mse", "settling_time", "control_cost", "success"]:
+for col in ["mse", "settling_time", "control_cost", "success",'non_mean_mse']:
     df[col] = (
         df[col]
         .astype(str)
@@ -69,9 +70,10 @@ def plot_metric(metric, ylabel):
     plt.tight_layout()
     plt.savefig(f"oscillator/results/{metric}_vs_lambda.png", dpi=300)
 
-plot_metric("mse", "Mean Squared Error")
+"""plot_metric("mse", "Mean Squared Error")
 plot_metric("settling_time", "Settling Time")
 plot_metric("control_cost", "Control Cost")
-plot_metric("success", "Success Rate")
+plot_metric("success", "Success Rate")"""
+plot_metric('non_mean_mse', "MSE * Timesteps")
 
 plt.show()

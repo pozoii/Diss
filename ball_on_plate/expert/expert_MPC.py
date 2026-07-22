@@ -313,6 +313,10 @@ def run_ExpertMPC(episodes=1000,max_steps=5000, H=30, sim = False):
                     "alphadot_next": next_obs[6],
                     "betadot_next": next_obs[7],
 
+                    # For replaying
+                    "q_pos": env.data.qpos.copy(),
+                    "q_vel": env.data.qvel.copy(),
+
                     # Done flag
                     "done": terminated or truncated or info.get("ball_lost", False),
                 })
