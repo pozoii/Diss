@@ -181,7 +181,7 @@ models/
 
 # datasets
 *.npz
-data/
+
 
 # logs
 wandb/
