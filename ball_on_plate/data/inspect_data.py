@@ -1,10 +1,10 @@
 import os
-import pandas as pd
-import numpy as np
 from glob import glob
 
+import numpy as np
+import pandas as pd
 
-DATA_DIR = "ball_on_plate/expert"
+DATA_DIR = "ball_on_plate/data"
 
 STATE_COLS = [
     "x",
@@ -13,14 +13,80 @@ STATE_COLS = [
     "ydot",
     "alpha",
     "beta",
-    "alphad",
-    "betad",
+    "alphadot",
+    "betadot",
 ]
 
 ACTION_COLS = [
     "roll_torque",
     "pitch_torque",
 ]
+
+# ------------------------------------------------------------------
+# CHANGE THIS TO MATCH YOUR ENVIRONMENT
+# ------------------------------------------------------------------
+BALL_LIMIT = 0.25
+
+
+def analyse_group(group_df):
+
+    print(f"Rows: {len(group_df):,}")
+    print(f"Episodes: {group_df['episode'].nunique()}")
+
+    episode_lengths = group_df.groupby("episode").size()
+
+    print("\nEpisode lengths")
+    print(episode_lengths.describe())
+
+    print("\nVery short episodes")
+    print(f"<= 5 steps : {(episode_lengths <= 5).sum()}")
+    print(f"<=10 steps : {(episode_lengths <= 10).sum()}")
+    print(f"<=20 steps : {(episode_lengths <= 20).sum()}")
+    print(f"<=50 steps : {(episode_lengths <= 50).sum()}")
+
+    print("\nMissing values")
+    missing = group_df.isnull().sum()
+    print(missing[missing > 0])
+
+    print("\nDone distribution")
+    print(group_df["done"].value_counts())
+
+    print("\nState statistics")
+    print(group_df[STATE_COLS].describe().T[["mean", "std", "min", "max"]])
+
+    print("\nAction statistics")
+    print(group_df[ACTION_COLS].describe().T[["mean", "std", "min", "max"]])
+
+    print("\nDuplicate rows")
+    print(group_df.duplicated().sum())
+
+    # ---------------------------------------------------------
+    # Success / failure analysis
+    # ---------------------------------------------------------
+
+    last_rows = (
+        group_df
+        .sort_values(["episode", "step"])
+        .groupby("episode")
+        .tail(1)
+    )
+
+    ball_lost = (
+        (last_rows["x"].abs() >= BALL_LIMIT)
+        |
+        (last_rows["y"].abs() >= BALL_LIMIT)
+    )
+
+    successes = (~ball_lost).sum()
+    failures = ball_lost.sum()
+
+    print("\nTermination")
+    print(f"Successful stabilisations : {successes}")
+    print(f"Ball lost                : {failures}")
+    print(f"Success rate             : {100*successes/len(last_rows):.2f}%")
+    print(f"Failure rate             : {100*failures/len(last_rows):.2f}%")
+
+    return episode_lengths
 
 
 def inspect_dataset(data_dir):
@@ -29,97 +95,48 @@ def inspect_dataset(data_dir):
 
     print(f"Found {len(files)} CSV files")
 
-    all_dfs = []
+    groups = {}
 
-    for i, file in enumerate(files):
-
-        print("\n" + "="*60)
-        print(f"File {i+1}/{len(files)}")
-        print(file)
+    for file in files:
 
         df = pd.read_csv(file)
 
-        print("\nShape:")
-        print(df.shape)
-
-        print("\nColumns:")
-        print(list(df.columns))
-
-        print("\nMissing values:")
-        missing = df.isnull().sum()
-        print(missing[missing > 0])
-
-        print("\nEpisodes:")
-        print(df["episode"].nunique())
-
-        print("\nSteps per episode:")
-        print(
-            df.groupby("episode")
-            .size()
-            .describe()
+        key = (
+            df["max_pos_reset"].iloc[0],
+            df["max_vel_reset"].iloc[0],
         )
 
-        print("\nDifficulty:")
-        if "difficulty" in df.columns:
-            print(df["difficulty"].value_counts())
-        else:
-            print("No difficulty column")
+        groups.setdefault(key, []).append(df)
 
-        print("\nDone distribution:")
-        if "done" in df.columns:
-            print(df["done"].value_counts())
-        else:
-            print("No done column")
+    print(f"\nFound {len(groups)} difficulty groups.\n")
 
+    all_dfs = []
 
-        all_dfs.append(df)
+    for (max_pos, max_vel), dfs in sorted(groups.items()):
 
+        group_df = pd.concat(dfs, ignore_index=True)
+
+        all_dfs.append(group_df)
+
+        print("=" * 70)
+        print(f"max_pos_reset = {max_pos}")
+        print(f"max_vel_reset = {max_vel}")
+        print("=" * 70)
+
+        analyse_group(group_df)
+
+        print("\n")
+
+    # ---------------------------------------------------------
 
     full_df = pd.concat(all_dfs, ignore_index=True)
 
-    print("\n\n")
-    print("="*60)
-    print("GLOBAL DATASET SUMMARY")
-    print("="*60)
+    print("=" * 70)
+    print("GLOBAL DATASET")
+    print("=" * 70)
 
-
-    print("\nShape:")
-    print(full_df.shape)
-
-
-    print("\nColumns missing:")
-    
-    expected = STATE_COLS + ACTION_COLS + ["episode","step"]
-
-    for c in expected:
-        if c not in full_df.columns:
-            print("MISSING:",c)
-
-
-    print("\nState statistics:")
-    print(
-        full_df[STATE_COLS]
-        .describe()
-        .T
-    )
-
-
-    print("\nAction statistics:")
-    print(
-        full_df[ACTION_COLS]
-        .describe()
-        .T
-    )
-
-
-    print("\nDuplicate rows:")
-    print(full_df.duplicated().sum())
-
-
-    return full_df
-
+    analyse_group(full_df)
 
 
 if __name__ == "__main__":
-
-    df = inspect_dataset(DATA_DIR)
+    inspect_dataset(DATA_DIR)
