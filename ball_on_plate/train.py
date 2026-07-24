@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.optim as optim
 import numpy as np
 import pandas as pd
+from ball_on_plate.data.bop_dataset import BoPDataset
 from ball_on_plate.dynamics.BoP_forward_dynamics import BallOnPlateDynamics
 from torch.utils.data import DataLoader
 
@@ -61,14 +62,14 @@ class EarlyStopping:
 
         return False
     
-def pinn_loss(pred_action,true_action, state, next_state, dynamics, lambd=1.0):
+def pinn_loss(pred_action,true_action, state, next_state, dynamics, state_std, action_std, lambd=1.0 ):
  
     # Behavioral cloning loss
-    bc_loss = nn.functional.mse_loss(pred_action, true_action)
+    bc_loss = torch.mean(((pred_action - true_action) / action_std)**2)
 
     pred_next_state = dynamics(state, pred_action, )
 
-    physics_loss = nn.functional.mse_loss(pred_next_state,next_state)
+    physics_loss = torch.mean(((pred_next_state-next_state)/state_std)**2)
 
     total_loss = (1-lambd) * bc_loss + lambd * physics_loss
 
@@ -82,6 +83,14 @@ def train(model, train_loader, val_loader, lambd, dynamics, epochs=20, lr=1e-3):
                mode='offline')
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    norm = np.load("ball_on_plate/data/normalization.npz")
+        
+    state_mean = torch.tensor(norm["state_mean"], dtype=torch.float32).to(device)
+    state_std = torch.tensor(norm["state_std"], dtype=torch.float32).to(device)
+
+    action_mean = torch.tensor(norm["action_mean"], dtype=torch.float32).to(device)
+    action_std = torch.tensor(norm["action_std"], dtype=torch.float32).to(device)
+
     model.to(device)
     dynamics.to(device)
 
@@ -108,9 +117,14 @@ def train(model, train_loader, val_loader, lambd, dynamics, epochs=20, lr=1e-3):
             next_state = batch["next_state"].to(device,non_blocking=True)
             action = batch["action"].to(device,non_blocking=True)   
 
-            pred = model(state)
+            state_norm = (state - state_mean) / state_std
 
-            loss, bc_loss, physics_loss = pinn_loss(pred_action=pred, true_action=action, state=state, next_state=next_state, lambd=lambd, dynamics=dynamics)
+            pred_norm = model(state_norm)
+            pred_action = torch.clamp(pred_norm * action_std + action_mean, -10,10)
+            
+
+
+            loss, bc_loss, physics_loss = pinn_loss(pred_action=pred, true_action=action, state=state, next_state=next_state, lambd=lambd, dynamics=dynamics, state_std=state_std,action_std=action_std)
 
             optimizer.zero_grad()
             loss.backward()
@@ -156,9 +170,13 @@ def train(model, train_loader, val_loader, lambd, dynamics, epochs=20, lr=1e-3):
                 next_state = batch["next_state"].to(device,non_blocking=True)
                 action = batch["action"].to(device,non_blocking=True)
 
-                pred = model(state)
+                state_norm = (state - state_mean) / state_std
 
-                loss, bc_loss, physics_loss = pinn_loss(pred_action=pred,true_action=action, state = state, next_state=next_state, lambd = lambd, dynamics=dynamics)
+                pred_norm = model(state_norm)
+
+                pred_action = torch.clamp(pred_norm * action_std + action_mean,-10,10)
+
+                loss, bc_loss, physics_loss = pinn_loss(pred_action=pred_action, true_action=action, state = state, next_state=next_state, lambd = lambd, dynamics=dynamics)
                 
 
                 val_loss['val_loss'] += loss.item()
@@ -210,8 +228,10 @@ def train(model, train_loader, val_loader, lambd, dynamics, epochs=20, lr=1e-3):
                 "lambda":lambd,
                 "physics_dt": dt,
                 "plate_joint_limit": plate_joint_limit,
-                "roll_model": roll_model,
-                "pitch_model": pitch_model
+                "roll_coef": roll_model.coef_,
+                "roll_intercept": roll_model.intercept_,
+                "pitch_coef": pitch_model.coef_,
+                "pitch_intercept": pitch_model.intercept_,
             }, f"ball_on_plate/models/{timestamp}_lambda={lambd}.pt")
 
         stop = early_stopper.step(val_loss["val_loss"])
@@ -234,8 +254,8 @@ if __name__ == "__main__":
     train_ds = BoPDataset("ball_on_plate/data/train.npz")
     val_ds   = BoPDataset("ball_on_plate/data/val.npz")
 
-    train_loader = DataLoader(train_ds, batch_size=64, shuffle=True, num_workers=2,pin_memory=True)
-    val_loader   = DataLoader(val_ds, batch_size=64, shuffle=False, num_workers=2, pin_memory=True)
+    train_loader = DataLoader(train_ds, batch_size=256, shuffle=True, num_workers=2,pin_memory=True)
+    val_loader   = DataLoader(val_ds, batch_size=256, shuffle=False, num_workers=2, pin_memory=True)
 
     model = PolicyNet()
 
