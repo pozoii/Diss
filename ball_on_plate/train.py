@@ -78,7 +78,7 @@ def pinn_loss(pred_action,true_action, state, next_state, dynamics, state_std, a
 def train(model, train_loader, val_loader, lambd, dynamics, epochs=20, lr=1e-3):
 
     wandb.init(project="diss-ball_on_plate",
-               config={"lr": lr,"lambda": lambd,"batch_size": 64},
+               config={"lr": lr,"lambda": lambd,"batch_size": 256},
                name=f"{timestamp}_lambda_{lambd}_job{job_id}",
                mode='offline')
 
@@ -135,13 +135,6 @@ def train(model, train_loader, val_loader, lambd, dynamics, epochs=20, lr=1e-3):
             train_loss['train_bc_loss'] += bc_loss.item()
             train_loss['train_physics_loss'] += physics_loss.item()
             
-
-            if i % 10000 == 0:
-                print(
-                    f"Epoch {epoch+1} "
-                    f"Batch {i}/{len(train_loader)} "
-                    f"Loss {loss.item():.4e}"
-                    )
         
         for k in train_loss:
             train_loss[k] /= len(train_loader)
@@ -176,7 +169,7 @@ def train(model, train_loader, val_loader, lambd, dynamics, epochs=20, lr=1e-3):
 
                 pred_action = torch.clamp(pred_norm * action_std + action_mean,-10,10)
 
-                loss, bc_loss, physics_loss = pinn_loss(pred_action=pred_action, true_action=action, state = state, next_state=next_state, lambd = lambd, dynamics=dynamics)
+                loss, bc_loss, physics_loss = pinn_loss(pred_action=pred_action, true_action=action, state = state, next_state=next_state, lambd = lambd, dynamics=dynamics,state_std=state_std,action_std=action_std)
                 
 
                 val_loss['val_loss'] += loss.item()
