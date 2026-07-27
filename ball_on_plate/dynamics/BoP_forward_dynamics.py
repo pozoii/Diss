@@ -8,7 +8,6 @@ class BallOnPlateDynamics(nn.Module):
 
         self.register_buffer("dt",torch.tensor(dt, dtype=torch.float32))
         self.register_buffer("plate_joint_limit",torch.tensor(plate_joint_limit, dtype=torch.float32))
-        self.plate_joint_limit = plate_joint_limit
 
         self.register_buffer("roll_coef",torch.tensor(roll_model.coef_, dtype=torch.float32))
         self.register_buffer("roll_intercept",torch.tensor(roll_model.intercept_, dtype=torch.float32))
