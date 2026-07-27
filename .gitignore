@@ -19,8 +19,8 @@ pyrightconfig.json
 # ===== ML / RL project specific =====
 
 # models
-#*.pt
-#models/
+*.pt
+models/
 
 # datasets
 *.npz
