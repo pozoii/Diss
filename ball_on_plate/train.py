@@ -124,7 +124,7 @@ def train(model, train_loader, val_loader, lambd, dynamics, epochs=20, lr=1e-3):
             
 
 
-            loss, bc_loss, physics_loss = pinn_loss(pred_action=pred, true_action=action, state=state, next_state=next_state, lambd=lambd, dynamics=dynamics, state_std=state_std,action_std=action_std)
+            loss, bc_loss, physics_loss = pinn_loss(pred_action=pred_action, true_action=action, state=state, next_state=next_state, lambd=lambd, dynamics=dynamics, state_std=state_std,action_std=action_std)
 
             optimizer.zero_grad()
             loss.backward()
