@@ -1,0 +1,2 @@
+model,difficulty,success,failure,settling_time,mse,control_cost,final_error
+Expert_MPC,easy,1.0,0.0,712.9480392156863,0.005184970749809405,130.20729489517598,0.005888499178627451

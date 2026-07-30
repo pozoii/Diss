@@ -4,7 +4,6 @@ import pandas as pd
 import torch
 
 from tqdm import tqdm
-from datetime import datetime
 from joblib import load
 
 from ball_on_plate.envs.ball_on_plate import BallOnPlateEnv
@@ -33,20 +32,35 @@ parser.add_argument(
     default=1000
     )
 
+# For expert:
+parser.add_argument(
+    "--job-id",
+    type=int,
+    default=0
+)
+
+parser.add_argument(
+    "--episode-offset",
+    type=int,
+    default=0
+)
+
 args = parser.parse_args()
-
-timestamp = datetime.now().strftime("%Y_%m_%d_%H_%M_")
-
 
 # ============================================================
 # Configuration
 # ============================================================
 MAX_STEPS = 5000
 
-MODEL_DIR = "ball_on_plate/models"
-OUTPUT_DIR = "ball_on_plate/results"
+RESULTS_DIR = "ball_on_plate/results"
 
-os.makedirs(OUTPUT_DIR, exist_ok=True)
+SUMMARY_DIR = os.path.join(RESULTS_DIR, "summaries")
+TRAJECTORY_DIR = os.path.join(RESULTS_DIR, "trajectories")
+EPISODE_DIR = os.path.join(RESULTS_DIR, "episode_metrics")
+
+os.makedirs(SUMMARY_DIR, exist_ok=True)
+os.makedirs(TRAJECTORY_DIR, exist_ok=True)
+os.makedirs(EPISODE_DIR, exist_ok=True)
 
 
 DIFFICULTIES = {
@@ -93,7 +107,7 @@ def load_policy(path):
 def nn_policy(model,device):
 
     state_mean_dev = state_mean.to(device)
-    state_std_dev = state_std.to(device)
+    state_std_dev= state_std.to(device)
     action_mean_dev = action_mean.to(device)
     action_std_dev = action_std.to(device)
 
@@ -103,13 +117,12 @@ def nn_policy(model,device):
         x = torch.tensor(obs,dtype=torch.float32,device=device)
 
 
-        x_norm = (x - state_mean) / state_std
+        x_norm = (x - state_mean_dev) / state_std_dev
         action_norm = model(x_norm)
 
-        action = torch.clamp(action_norm *action_std+action_mean,-10,10)
+        action = torch.clamp(action_norm *action_std_dev+action_mean_dev,-10,10)
 
         return action.cpu().numpy()
-
 
     return policy
 
@@ -131,9 +144,16 @@ def create_expert(env):
 # Evaluation
 # ============================================================
 
-def evaluate_controller(env,controller,n_episodes):
+def evaluate_controller(env,controller,n_episodes,model_name,difficulty_name,job_id,episode_offset,expert=None):
 
-    results=[]
+    episode_results = []
+
+    trajectory_buffer = []
+    episode_buffer = []
+
+    trajectory_path = os.path.join(TRAJECTORY_DIR,f"{model_name}_{difficulty_name}_job{job_id:03d}.csv")
+
+    episode_path = os.path.join(EPISODE_DIR,f"{model_name}_{difficulty_name}_job{job_id:03d}.csv")
 
     for ep in tqdm(range(n_episodes),desc="Evaluating"):
 
@@ -142,6 +162,7 @@ def evaluate_controller(env,controller,n_episodes):
         if expert is not None:
             expert.reset()
 
+        global_episode = episode_offset + ep
         mse=[]
         control_cost=[]
 
@@ -149,6 +170,8 @@ def evaluate_controller(env,controller,n_episodes):
         truncated=False
 
         for t in range(MAX_STEPS):
+
+            state = obs.copy()
 
             action = controller(obs)
 
@@ -160,44 +183,140 @@ def evaluate_controller(env,controller,n_episodes):
 
             control_cost.append(np.sum(action**2))
 
+            trajectory_buffer.append({
+
+                "job_id": job_id,
+                "episode": global_episode,
+                "step": t,
+
+                # Current state
+                "x": state[0],
+                "y": state[1],
+                "xdot": state[2],
+                "ydot": state[3],
+                "alpha": state[4],
+                "beta": state[5],
+                "alphadot": state[6],
+                "betadot": state[7],
+
+                # Action
+                "roll_torque": action[0],
+                "pitch_torque": action[1],
+
+                # Next state
+                "x_next": next_obs[0],
+                "y_next": next_obs[1],
+                "xdot_next": next_obs[2],
+                "ydot_next": next_obs[3],
+                "alpha_next": next_obs[4],
+                "beta_next": next_obs[5],
+                "alphadot_next": next_obs[6],
+                "betadot_next": next_obs[7],
+
+                # Environment information
+                "reward": reward,
+                "terminated": terminated,
+                "truncated": truncated,
+
+                "ball_stable": info["ball_stable"],
+                "ball_lost": info["ball_lost"],
+            })
+
             obs = next_obs
 
             if terminated or truncated:
                 break
 
-        results.append({
+        episode_result = {
+
+            "job_id": job_id,
+            "episode": global_episode,
 
             "success": float(info["ball_stable"]),
-
             "failure": float(info["ball_lost"]),
 
-            "steps": t+1,
+            "steps": t + 1,
 
-            "settling_time": t+1 if info["ball_stable"]else np.nan,
+            "settling_time": (
+                t + 1
+                if info["ball_stable"]
+                else np.nan
+            ),
 
             "mse": np.mean(mse),
 
-            "control_cost":np.sum(control_cost),
+            "control_cost": np.sum(control_cost),
 
-            "final_position_error": np.linalg.norm(obs[:2])
-            })
+            "final_position_error": np.linalg.norm(obs[:2]),
+        }
+
+        episode_results.append(episode_result)
+
+        episode_buffer.append(episode_result)
 
 
-    return pd.DataFrame(results)
+        # Save every 5 episodes
+        if (ep + 1) % 5 == 0:
 
+            if trajectory_buffer:
+                trajectory_df = pd.DataFrame(trajectory_buffer)
+
+                trajectory_df.to_csv(
+                    trajectory_path,
+                    mode="a",
+                    header=not os.path.exists(trajectory_path),
+                    index=False,
+                )
+
+                trajectory_buffer.clear()
+
+
+            if episode_buffer:
+                episode_df = pd.DataFrame(episode_buffer)
+
+                episode_df.to_csv(
+                    episode_path,
+                    mode="a",
+                    header=not os.path.exists(episode_path),
+                    index=False,
+                )
+
+                episode_buffer.clear()
+
+    if trajectory_buffer:
+
+        trajectory_df = pd.DataFrame(trajectory_buffer)
+
+        trajectory_df.to_csv(
+            trajectory_path,
+            mode="a",
+            header=not os.path.exists(trajectory_path),
+            index=False,
+        )
+
+
+    if episode_buffer:
+
+        episode_df = pd.DataFrame(episode_buffer)
+
+        episode_df.to_csv(
+            episode_path,
+            mode="a",
+            header=not os.path.exists(episode_path),
+            index=False,
+        )
+
+    return pd.DataFrame(episode_results)
 
 # ============================================================
 # Main
 # ============================================================
-
 
 all_results=[]
 
 difficulty_name = args.difficulty
 
 difficulty = DIFFICULTIES[difficulty_name]
-
-
 
 print("\n")
 print("="*70)
@@ -226,7 +345,7 @@ else:
 
     model_name = args.model
 
-nn_results = evaluate_controller(env,controller,args.episodes)
+nn_results = evaluate_controller(env,controller,args.episodes,model_name=model_name, difficulty_name=difficulty_name, job_id=args.job_id, episode_offset= args.episode_offset, expert=expert)
 
 summary={
 
@@ -259,8 +378,7 @@ env.close()
 
 df = pd.DataFrame(all_results)
 
-
-output = (f"ball_on_plate/results/{model_name}_{difficulty_name}.csv")
+output = os.path.join(SUMMARY_DIR,f"{model_name}_{difficulty_name}_job{args.job_id:03d}.csv")
 
 df.to_csv(output,index=False)
 

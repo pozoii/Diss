@@ -1,0 +1,2 @@
+model,difficulty,success,failure,settling_time,mse,control_cost,final_error
+2026_07_27_12_00_lambda=0.5,hard,0.873,0.127,759.5647193585338,0.013765637159978332,427.86945,0.037970502

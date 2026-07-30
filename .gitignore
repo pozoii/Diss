@@ -41,4 +41,6 @@ ball_on_plate/sh_scripts
 *.sh
 wandb/
 
+ball_on_plate/results/trajectories/
+
 
