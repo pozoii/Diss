@@ -147,7 +147,7 @@ for ep in range(start_episode, end_episode):
 
         print(f"Saving checkpoint ({len(buffer)} rows)")
 
-        df = pd.DataFrame(buffer)
+        df = pd.DataFrame(buffer)º
 
         df.to_csv(filename,mode="a",header=not os.path.exists(filename),index=False,)
 

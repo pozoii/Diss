@@ -8,7 +8,6 @@ from ball_on_plate.expert.expert_MPC import  run_ExpertMPC
 
 def main():
     Hs = [1,2,5,10,20,30,50,75,100,150,250,500]
-    Hs= [100]
     if len(sys.argv) > 1:
         idx = int(sys.argv[1])
     else:
