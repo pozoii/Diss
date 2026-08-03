@@ -43,4 +43,8 @@ wandb/
 
 ball_on_plate/results/trajectories/
 
-
+# Generated oscillator expert data
+oscillator/expert/PD_sweep.csv
+oscillator/data/
+# Experiment outputs
+oscillator/outs/
