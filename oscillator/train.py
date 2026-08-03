@@ -2,8 +2,8 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
-from oscillator.preprocessing.data_preprocessing import OscillatorDataset
-from tqdm import tqdm
+from oscillator.data.data_preprocessing import OscillatorDataset
+import numpy as np
 import pandas as pd
 import wandb
 import os
@@ -53,27 +53,48 @@ class EarlyStopping:
                 return True  # stop
 
         return False
-    
-def pinn_loss(pred_action,true_action,x,xddot,m=1.0,k=10.0,lambd=1.0):
- 
-    # Behavioral cloning loss
-    bc_loss = nn.functional.mse_loss(pred_action, true_action)
 
-    x = x.view(-1)
-    xddot = xddot.view(-1)
-    pred_action = pred_action.view(-1)
+class HarmonicOscillatorDynamics(nn.Module):
+
+    def __init__(self, dt, m=1.0, k=10.0):
+        super().__init__()
+
+        self.dt = dt
+        self.m = m
+        self.k = k
+
+    def forward(self, state, action):
+
+        x = state[:,0]
+        xdot = state[:,1]
+
+        u = action.squeeze(-1)
+
+        xddot = (u - self.k*x)/self.m
+
+        x_next = x + self.dt*xdot
+        xdot_next = xdot + self.dt*xddot
+
+        
+        next_state = torch.stack([x_next,xdot_next,],dim=1)
+
+        return next_state
+     
+def pinn_loss(pred_action,true_action,state,next_state,state_std, action_std, dynamics,lambd=1.0):
+
+
+    # Behavioral cloning loss
+    bc_loss = torch.mean(((pred_action - true_action) / action_std)**2)
 
     # Physics residual
-    # old and bad residual: residual = m * xddot + k * x - pred_action
-    residual = xddot - (pred_action - k * x) / m
+    pred_next_state = dynamics(state, pred_action)
+    physics_loss = torch.mean(((pred_next_state-next_state)/state_std)**2)
 
-    physics_loss = torch.mean(residual**2)
-
-    total_loss = bc_loss + lambd * physics_loss
+    total_loss = (1-lambd) * bc_loss + lambd * physics_loss
 
     return total_loss, bc_loss, physics_loss
 
-def train(model, train_loader, val_loader, lambd, epochs=20, lr=1e-3):
+def train(model, train_loader, val_loader, lambd, dynamics, epochs=20, lr=1e-3):
 
     wandb.init(project="diss-oscillator",
                config={"lr": lr,"lambda": lambd,"batch_size": 64},
@@ -81,7 +102,17 @@ def train(model, train_loader, val_loader, lambd, epochs=20, lr=1e-3):
                mode='offline')
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    norm = np.load("oscillator/data/normalization.npz")
+            
+    state_mean = torch.tensor(norm["state_mean"], dtype=torch.float32).to(device)
+    state_std = torch.tensor(norm["state_std"], dtype=torch.float32).to(device)
+
+    action_mean = torch.tensor(norm["action_mean"], dtype=torch.float32).to(device)
+    action_std = torch.tensor(norm["action_std"], dtype=torch.float32).to(device)
+
     model.to(device)
+    dynamics.to(device)
 
     optimizer = optim.Adam(model.parameters(), lr=lr)
     early_stopper = EarlyStopping(patience=10, min_delta=1e-4)
@@ -102,25 +133,17 @@ def train(model, train_loader, val_loader, lambd, epochs=20, lr=1e-3):
 
         for i, batch in enumerate(train_loader):
 
-            obs = batch["obs"].to(device,non_blocking=True)
-            x = obs[:, 0].view(-1)
-            xdot = obs[:, 1].view(-1)
-            xdotdot = obs[:, 2].view(-1)
-            target = obs[:, 3].view(-1)
-            e = target - x
+            state = batch["state"].to(device,non_blocking=True)
+            next_state = batch["next_state"].to(device,non_blocking=True)
+            action = batch["action"].to(device,non_blocking=True)
 
-            model_input = torch.stack((e, xdot), dim=1) 
+            state_norm = (state - state_mean) / state_std
+            
+            pred_norm = model(state_norm)
+            pred_action = torch.clamp(pred_norm * action_std + action_mean, -50,50)
+ 
 
-            action = batch["action"].to(device,non_blocking=True)   
-
-            # ensure correct shape
-            if action.ndim == 1:
-                action = action.unsqueeze(1)
-
-            pred = model(model_input)
-
-            loss, bc_loss, physics_loss = pinn_loss(pred_action=pred, true_action=action, x=x,xddot= xdotdot, lambd=lambd)
-
+            loss, bc_loss, physics_loss = pinn_loss(pred_action=pred_action, true_action=action, state=state, next_state=next_state, dynamics=dynamics, state_std=state_std, action_std=action_std, lambd=lambd)
             optimizer.zero_grad()
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
@@ -161,26 +184,18 @@ def train(model, train_loader, val_loader, lambd, epochs=20, lr=1e-3):
         with torch.no_grad():
             for batch in val_loader:
 
-                obs = batch["obs"].to(device,non_blocking=True)
-
-                x = obs[:, 0].view(-1)
-                xdot = obs[:, 1].view(-1)
-                xdotdot = obs[:, 2].view(-1)
-                target = obs[:, 3].view(-1)
-
-                e = target - x
-                model_input = torch.stack([e, xdot], dim=1)
-
+                state = batch["state"].to(device,non_blocking=True)
+                next_state = batch["next_state"].to(device,non_blocking=True)
                 action = batch["action"].to(device,non_blocking=True)
 
-                if action.ndim == 1:
-                    action = action.unsqueeze(1)
+                state_norm = (state - state_mean) / state_std
 
-                pred = model(model_input)
+                pred_norm = model(state_norm)
 
-                loss, bc_loss, physics_loss = pinn_loss(pred_action=pred,true_action=action, x = x, xddot = xdotdot, lambd = lambd)
-                
+                pred_action = torch.clamp(pred_norm * action_std + action_mean,-50,50)
 
+                loss, bc_loss, physics_loss = pinn_loss(pred_action=pred_action, true_action=action, state = state, next_state=next_state, lambd = lambd, dynamics=dynamics,state_std=state_std,action_std=action_std)
+               
                 val_loss['val_loss'] += loss.item()
                 val_loss['val_bc_loss'] += bc_loss.item()
                 val_loss['val_physics_loss'] += physics_loss.item()
@@ -259,5 +274,9 @@ if __name__ == "__main__":
     parser.add_argument("--lambda_", type=float)
     args = parser.parse_args()
 
+    dt = 0.01
+
+    dynamics = HarmonicOscillatorDynamics(dt)
+
     lambd = args.lambda_
-    train(model, train_loader, val_loader, lambd=lambd)
+    train(model, train_loader, val_loader, lambd=lambd, dynamics=dynamics)

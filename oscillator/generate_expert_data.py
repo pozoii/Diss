@@ -27,9 +27,9 @@ print(f"Episodes {start_episode} -> {end_episode-1}")
 
 env = HarmonicOscillatorEnv(render_mode=None)
 
-obs_list = []
+states_list = []
 actions_list = []
-next_obs_list = []
+next_states_list = []
 dones_list = []
 
 
@@ -43,23 +43,18 @@ for ep in range(start_episode, end_episode):
 
     for step in range(MAX_STEPS):
 
-        x, xdot, xddot = obs
+        x, xdot = obs
 
-        action = np.array(
-            [KP * (target - x) - KD * xdot],
-            dtype=np.float32,
-        )
+        action = np.array([KP * (target - x) - KD * xdot],dtype=np.float32,)
 
-        next_obs, reward, terminated, truncated, info = env.step(action)
+        next_state, reward, terminated, truncated, info = env.step(action)
 
-        obs_list.append([x, xdot, xddot, target])
+        states_list.append([x, xdot])
         actions_list.append(action[0])
-        next_obs_list.append(
-            [next_obs[0], next_obs[1], next_obs[2], target]
-        )
+        next_states_list.append([next_state[0], next_state[1]])
         dones_list.append(terminated or truncated)
 
-        obs = next_obs
+        obs = next_state
 
         if terminated or truncated:
             break
@@ -77,11 +72,11 @@ filename = os.path.join(
 
 np.savez_compressed(
     filename,
-    obs=np.asarray(obs_list, dtype=np.float32),
+    state=np.asarray(states_list, dtype=np.float32),
     actions=np.asarray(actions_list, dtype=np.float32),
-    next_obs=np.asarray(next_obs_list, dtype=np.float32),
+    next_state=np.asarray(next_states_list, dtype=np.float32),
     dones=np.asarray(dones_list, dtype=bool),
 )
 
 print(f"Saved {filename}")
-print(f"Transitions: {len(obs_list)}")
+print(f"Transitions: {len(states_list)}")

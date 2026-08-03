@@ -36,7 +36,34 @@ def load_policy(checkpoint_path="best_model.pt", device=None):
     model.load_state_dict(checkpoint["model_state_dict"])
     model.eval()
 
-    return model, device
+    norm = np.load("oscillator/data/normalization.npz")
+
+    state_mean = torch.tensor(
+        norm["state_mean"],
+        dtype=torch.float32,
+        device=device
+    )
+
+    state_std = torch.tensor(
+        norm["state_std"],
+        dtype=torch.float32,
+        device=device
+    )
+
+    action_mean = torch.tensor(
+        norm["action_mean"],
+        dtype=torch.float32,
+        device=device
+    )
+
+    action_std = torch.tensor(
+        norm["action_std"],
+        dtype=torch.float32,
+        device=device
+    )
+
+    return model, device, state_mean, state_std, action_mean, action_std
+
 
 def evaluate_controller(env,policy_fn,init_configs,max_steps=500,):
 
@@ -45,21 +72,23 @@ def evaluate_controller(env,policy_fn,init_configs,max_steps=500,):
     for ini in tqdm(init_configs, desc="Evaluating"):
 
         obs, info = env.reset(options={"ini": ini})
-        target = info["target"]
 
-        errors = []
+        pos_errors = []
+        vel_errors = []
         actions = []
 
         for t in range(max_steps):
 
-            action = policy_fn(obs, target)
+            action = policy_fn(obs)
 
             next_obs, reward, terminated, truncated, info = env.step(action)
 
             x = obs[0]
-            error = target - x
+            xdot=obs[1]
+           
 
-            errors.append(error**2)
+            pos_errors.append(abs(x))
+            vel_errors.append(abs(xdot))
             actions.append(action[0]**2)
 
             obs = next_obs
@@ -67,13 +96,12 @@ def evaluate_controller(env,policy_fn,init_configs,max_steps=500,):
             if terminated or truncated:
                 break
 
-        mse = np.mean(errors)
-        control_cost = np.sum(actions)
+        cumulative_reward = np.sum(-10*np.array(pos_errors)-1*np.array(vel_errors)-0.01*np.array(actions))
 
         results.append({
-            "mse": mse,
+            "cum_reward": cumulative_reward,
             "settling_time": t + 1,
-            "control_cost": control_cost,
+            "control_cost": np.sum(actions),
             "success": float(terminated),
         })
 
@@ -82,30 +110,33 @@ def evaluate_controller(env,policy_fn,init_configs,max_steps=500,):
 def pd_policy(Kp, Kd):
     
     @torch.no_grad()
-    def policy(obs, target):
+    def policy(obs):
 
-        x, xdot, xddot = obs
+        x, xdot = obs
 
-        u = Kp * (target - x) - Kd * xdot
+        u = -Kp *  x - Kd * xdot
 
         return np.array([u], dtype=np.float32)
 
     return policy
 
-def nn_policy(model, device):
+def nn_policy(model, device, state_mean, state_std, action_mean, action_std):
 
     @torch.no_grad()
-    def policy(obs, target):
+    def policy(obs):
 
-        x, xdot, xddot = obs
+        x, xdot = obs
 
-        e = target - x
+        inp = torch.tensor([[x, xdot]], dtype=torch.float32,device=device)
 
-        inp = torch.tensor([[e, xdot]], dtype=torch.float32,device=device)
+        inp = (inp - state_mean) / state_std
 
-        u = model(inp).cpu().numpy()[0]
+        pred_norm = model(inp)
 
-        return u.astype(np.float32)
+        u = pred_norm * action_std + action_mean
+
+
+        return u.cpu().numpy().reshape(-1).astype(np.float32)
 
     return policy
 
@@ -117,11 +148,11 @@ env = HarmonicOscillatorEnv(render_mode=None)
 
 inits = init_configs(10000,p_range=1, v_range=0.5)
 
-pd_results = evaluate_controller(env, pd_policy(32, 2), init_configs= inits)
+pd_results = evaluate_controller(env, pd_policy(16, 8), init_configs= inits)
 
 pd_results = {
             "model": "Expert PD",
-            "mse": [pd_results["mse"].mean()],
+            "cum_reward": [pd_results["cum_reward"].mean()],
             "settling_time": [pd_results["settling_time"].mean()],
             "control_cost": [pd_results["control_cost"].mean()],    
             "success": [pd_results["success"].mean()],
@@ -134,17 +165,17 @@ all_results.append(pd_results)
 
 for model_path in glob.glob(os.path.join(model_dir, "*.pt")):
 
-    model, device = load_policy(model_path)
+    model, device, state_mean, state_std, action_mean, action_std = load_policy(model_path)
 
     model_name = os.path.basename(model_path)
 
     env = HarmonicOscillatorEnv(render_mode=None)
 
-    nn_results = evaluate_controller(env,nn_policy(model, device), init_configs= inits)
+    nn_results = evaluate_controller(env,nn_policy(model, device, state_mean,state_std,action_mean,action_std), init_configs= inits)
 
     nn_results = {
             "model": [model_name],
-            "mse": [nn_results["mse"].mean()],
+            "cum_reward": [nn_results["cum_reward"].mean()],
             "settling_time": [nn_results["settling_time"].mean()],
             "control_cost": [nn_results["control_cost"].mean()],
             "success": [nn_results["success"].mean()],

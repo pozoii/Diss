@@ -61,7 +61,6 @@ class HarmonicOscillatorEnv(gym.Env):
         return np.array([
             self.data.qpos[0],
             self.data.qvel[0],
-            self.data.qacc[0]
         ], dtype=np.float32)
 
     def _get_info(self):
@@ -121,7 +120,7 @@ class HarmonicOscillatorEnv(gym.Env):
         info = self._get_info()
         obs = self._get_obs()
         
-        x,xdot, xdotdot = obs
+        x,xdot = obs
         self.step_count += 1
 
         # reward
