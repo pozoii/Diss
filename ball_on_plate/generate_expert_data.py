@@ -29,10 +29,10 @@ difficulty_level = job_id % 4
 
 
 difficulty = {
-    0: {"max_pos_reset": 0.15, "max_vel_reset": 0.50,},
-    1: {"max_pos_reset": 0.20,"max_vel_reset": 0.50,},
-    2: {"max_pos_reset": 0.20,"max_vel_reset": 0.80, },
-    3: {"max_pos_reset": 0.24,"max_vel_reset": 1.0,},
+    0: {"max_pos_reset": 0.15, "max_vel_reset": 0.25,},
+    1: {"max_pos_reset": 0.20,"max_vel_reset": 0.25,},
+    2: {"max_pos_reset": 0.20,"max_vel_reset": 0.70, },
+    3: {"max_pos_reset": 0.23,"max_vel_reset": 1.0,},
     }[difficulty_level]
 
 
@@ -58,7 +58,7 @@ plate_models = (plate_models["roll_model"],plate_models["pitch_model"],)
 
 expert = ExpertMPC(env=env,plate_models=plate_models,H=HORIZON,)
 
-filename = os.path.join(SAVE_DIR,f"expert_data_{job_id:04d}.csv")
+filename = os.path.join(SAVE_DIR,f"expert_data_{job_id:04d}_diff_{difficulty_level}.csv")
 
 buffer = []
 
@@ -147,7 +147,7 @@ for ep in range(start_episode, end_episode):
 
         print(f"Saving checkpoint ({len(buffer)} rows)")
 
-        df = pd.DataFrame(buffer)º
+        df = pd.DataFrame(buffer)
 
         df.to_csv(filename,mode="a",header=not os.path.exists(filename),index=False,)
 

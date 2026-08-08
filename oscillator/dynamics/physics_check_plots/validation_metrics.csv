@@ -1,0 +1,7 @@
+metric,value
+one_step_x_rmse,1.1507021114e-08
+one_step_x_mae,3.9126648588e-09
+one_step_xdot_rmse,3.4814185312e-08
+one_step_xdot_mae,1.4030987927e-08
+rollout_50_x_rmse,3.7070851278e-08
+rollout_50_xdot_rmse,9.1623853393e-08
