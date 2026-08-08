@@ -5,6 +5,7 @@ from ball_on_plate.envs.ball_on_plate import BallOnPlateEnv
 from sklearn.linear_model import LinearRegression
 import matplotlib.pyplot as plt
 from joblib import dump
+import os
 
 class BallPDController:
 
@@ -33,7 +34,7 @@ class BallPDController:
 controller = BallPDController(kp=2,kd=4,max_torque=10.0)   
 
 
-def learn_plate_dynamics(num_episodes=500,max_steps=5000):
+def learn_plate_dynamics(num_episodes=100,max_steps=5000):
 
     env = BallOnPlateEnv(render_mode=None,ball=True)
     records=[]
@@ -83,12 +84,25 @@ def learn_plate_dynamics(num_episodes=500,max_steps=5000):
     return df
 
 
+PLOT_DIR = "ball_on_plate/dynamics/plate_dynamics_plots"
+os.makedirs(PLOT_DIR, exist_ok=True)
+
 df = learn_plate_dynamics()
 
 plt.hist(df["alpha"], bins=100)
-plt.show()
+plt.savefig(
+        os.path.join(PLOT_DIR, "alpha_distribution.png"),
+        dpi=300,
+        bbox_inches="tight",
+    )
+
 
 plt.hist(df["beta"], bins=100)
+plt.savefig(
+        os.path.join(PLOT_DIR, "beta_distribution.png"),
+        dpi=300,
+        bbox_inches="tight",
+    )
 plt.show()
 
 limit = np.deg2rad(30)
@@ -111,7 +125,7 @@ pitch_model.fit(X_pitch, y_pitch)
 
 dump({"roll_model": roll_model,"pitch_model": pitch_model,},"ball_on_plate/dynamics/plate_models.joblib")
 
-"""print("Roll dynamics")
+print("Roll dynamics")
 print("----------------")
 print(f"Intercept : {roll_model.intercept_:.6f}")
 print(f"Torque    : {roll_model.coef_[0]:.6f}")
@@ -121,14 +135,21 @@ print(f"R²        : {roll_model.score(X_roll, y_roll):.6f}")
 
 plt.scatter(roll_model.predict(X_roll),df_lim["alpha_ddot"],s=2)
 
+
 lims=[df_lim["alpha_ddot"].min(),df_lim["alpha_ddot"].max()]
 
 plt.plot(lims,lims,"--")
 plt.xlabel("predicted")
 plt.ylabel("real")
 plt.title("Roll acceleration predictions vs real")
-plt.show()"""
-"""print("\nPitch dynamics")
+plt.show()
+plt.savefig(
+        os.path.join(PLOT_DIR, "roll_dynamics.png"),
+        dpi=300,
+        bbox_inches="tight",
+    )
+
+print("\nPitch dynamics")
 print("----------------")
 print(f"Intercept : {pitch_model.intercept_:.6f}")
 print(f"Torque    : {pitch_model.coef_[0]:.6f}")
@@ -146,7 +167,13 @@ plt.plot(lims,lims,"--")
 plt.xlabel("predicted")
 plt.ylabel("real")
 plt.title("Pitch acceleration predictions vs real")
-plt.show()"""
+plt.savefig(
+        os.path.join(PLOT_DIR, "pitch_dynamics.png"),
+        dpi=300,
+        bbox_inches="tight",
+    )
+
+plt.show()
 
 # ---------------------------------------
 # Validate on full dataset with angle clipping
@@ -199,7 +226,7 @@ df_test["beta_pred"] = beta_pred
 df_test["beta_dot_pred"] = beta_dot_pred
 
 
-"""print("Roll angle error")
+print("Roll angle error")
 print("----------------")
 print("Mean:", np.mean(abs(df_test["alpha_prime"] - df_test["alpha_pred"])))
 print("Max :", np.max(abs(df_test["alpha_prime"] - df_test["alpha_pred"])))
@@ -221,6 +248,12 @@ plt.plot(lims,lims,"--")
 plt.xlabel("Predicted alpha acceleration")
 plt.ylabel("MuJoCo alpha acceleration")
 plt.title("Roll dynamics validation")
+plt.savefig(
+        os.path.join(PLOT_DIR, "roll_dynamics1.png"),
+        dpi=300,
+        bbox_inches="tight",
+    )
+
 plt.show()
 
 plt.figure(figsize=(6,6))
@@ -234,7 +267,13 @@ plt.plot(lims,lims,"--")
 plt.xlabel("Predicted beta acceleration")
 plt.ylabel("MuJoCo beta acceleration")
 plt.title("Pitch dynamics validation")
-plt.show()"""
+plt.savefig(
+        os.path.join(PLOT_DIR, "pitch_dynamics1.png"),
+        dpi=300,
+        bbox_inches="tight",
+    )
+
+plt.show()
 
 
 

@@ -15,10 +15,7 @@ def init_configs(n_eps,p_range=1, v_range=0.5, seed=42):
 
     inits = []
     for _ in range(n_eps):
-        inits.append({
-            "pos": rng.uniform(-p_range, p_range),
-            "vel": rng.uniform(-v_range, v_range),
-        })
+        inits.append({"pos": rng.uniform(-p_range, p_range),"vel": rng.uniform(-v_range, v_range),})
 
     return inits
 
@@ -38,29 +35,13 @@ def load_policy(checkpoint_path="best_model.pt", device=None):
 
     norm = np.load("oscillator/data/normalization.npz")
 
-    state_mean = torch.tensor(
-        norm["state_mean"],
-        dtype=torch.float32,
-        device=device
-    )
+    state_mean = torch.tensor(norm["state_mean"],dtype=torch.float32,device=device)
 
-    state_std = torch.tensor(
-        norm["state_std"],
-        dtype=torch.float32,
-        device=device
-    )
+    state_std = torch.tensor(norm["state_std"],dtype=torch.float32,device=device)
 
-    action_mean = torch.tensor(
-        norm["action_mean"],
-        dtype=torch.float32,
-        device=device
-    )
+    action_mean = torch.tensor(norm["action_mean"],dtype=torch.float32,device=device)
 
-    action_std = torch.tensor(
-        norm["action_std"],
-        dtype=torch.float32,
-        device=device
-    )
+    action_std = torch.tensor(norm["action_std"],dtype=torch.float32,device=device)
 
     return model, device, state_mean, state_std, action_mean, action_std
 
@@ -98,12 +79,7 @@ def evaluate_controller(env,policy_fn,init_configs,max_steps=500,):
 
         cumulative_reward = np.sum(-10*np.array(pos_errors)-1*np.array(vel_errors)-0.01*np.array(actions))
 
-        results.append({
-            "cum_reward": cumulative_reward,
-            "settling_time": t + 1,
-            "control_cost": np.sum(actions),
-            "success": float(terminated),
-        })
+        results.append({"cum_reward": cumulative_reward,"settling_time": t + 1,"control_cost": np.sum(actions),"success": float(terminated),})
 
     return pd.DataFrame(results)
 
@@ -146,17 +122,11 @@ model_dir = "oscillator/models"
 
 env = HarmonicOscillatorEnv(render_mode=None)
 
-inits = init_configs(10000,p_range=1, v_range=0.5)
+inits = init_configs(1000,p_range=1, v_range=0.5)
 
 pd_results = evaluate_controller(env, pd_policy(16, 8), init_configs= inits)
 
-pd_results = {
-            "model": "Expert PD",
-            "cum_reward": [pd_results["cum_reward"].mean()],
-            "settling_time": [pd_results["settling_time"].mean()],
-            "control_cost": [pd_results["control_cost"].mean()],    
-            "success": [pd_results["success"].mean()],
-            }
+pd_results = {"model": "Expert PD","cum_reward": [pd_results["cum_reward"].mean()],"settling_time": [pd_results["settling_time"].mean()],"control_cost": [pd_results["control_cost"].mean()],    "success": [pd_results["success"].mean()],}
 
 print(f"\n===== Evaluation Results for Expert PD =====")
 print(pd_results)
@@ -173,13 +143,7 @@ for model_path in glob.glob(os.path.join(model_dir, "*.pt")):
 
     nn_results = evaluate_controller(env,nn_policy(model, device, state_mean,state_std,action_mean,action_std), init_configs= inits)
 
-    nn_results = {
-            "model": [model_name],
-            "cum_reward": [nn_results["cum_reward"].mean()],
-            "settling_time": [nn_results["settling_time"].mean()],
-            "control_cost": [nn_results["control_cost"].mean()],
-            "success": [nn_results["success"].mean()],
-        }
+    nn_results = {"model": [model_name],"cum_reward": [nn_results["cum_reward"].mean()],"settling_time": [nn_results["settling_time"].mean()],"control_cost": [nn_results["control_cost"].mean()],"success": [nn_results["success"].mean()],}
 
     print(f"\n===== Evaluation Results for {model_name} =====")
     print(nn_results)

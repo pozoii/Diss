@@ -7,7 +7,7 @@ import mujoco
 class BallOnPlateEnv(gym.Env):
     metadata = {"render_modes": ["human"], "render_fps": 60}
 
-    def __init__(self, render_mode=None, target=np.array([0.0, 0.0], dtype=np.float32), ball=True, max_pos_reset=0.2, max_vel_reset=0.5, stable_pos_thresh=0.02 ,stable_vel_thresh=0.02, settling_window=50):
+    def __init__(self, render_mode=None, target=np.array([0.0, 0.0], dtype=np.float32), ball=True, max_pos_reset=0.20, max_vel_reset=0.25, stable_pos_thresh=0.02 ,stable_vel_thresh=0.02, settling_window=50):
         
         super().__init__()
 
@@ -83,8 +83,8 @@ class BallOnPlateEnv(gym.Env):
 
         # action = roll, pitch torques
         self.action_space = spaces.Box(
-            low=-50.0,
-            high=50.0,
+            low=-10.0,
+            high=10.0,
             shape=(2,),
             dtype=np.float32
         )
@@ -227,7 +227,7 @@ class BallOnPlateEnv(gym.Env):
 
         self.step_count += 1
 
-        action = np.clip(action, -50, 50)
+        action = np.clip(action, -10, 10)
 
         # apply control
         self.data.ctrl[0] = action[0]

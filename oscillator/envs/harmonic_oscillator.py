@@ -94,7 +94,7 @@ class HarmonicOscillatorEnv(gym.Env):
         else:
             # random initial condition (like random agent position)
             self.data.qpos[0] = self.np_random.uniform(-1.0, 1.0)
-            self.data.qvel[0] = self.np_random.uniform(-0.5, 0.5)
+            self.data.qvel[0] = self.np_random.uniform(-1.0, 1.0)
             mujoco.mj_forward(self.model, self.data)
 
         obs = self._get_obs()
@@ -124,7 +124,7 @@ class HarmonicOscillatorEnv(gym.Env):
         self.step_count += 1
 
         # reward
-        reward = -((x - self.target)**2+ 0.01 * action[0]**2)
+        reward = -(10*(x - self.target)**2+ xdot**2+ 0.01 * action[0]**2)
 
         if (abs(x - self.target) < self.position_stability and abs(xdot) < self.velocity_stability):
             self.stable_steps += 1
