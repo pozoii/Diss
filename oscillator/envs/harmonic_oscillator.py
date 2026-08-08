@@ -94,7 +94,7 @@ class HarmonicOscillatorEnv(gym.Env):
         else:
             # random initial condition (like random agent position)
             self.data.qpos[0] = self.np_random.uniform(-1.0, 1.0)
-            self.data.qvel[0] = self.np_random.uniform(-0.5, 0.5)
+            self.data.qvel[0] = self.np_random.uniform(-1, 1)
             mujoco.mj_forward(self.model, self.data)
 
         obs = self._get_obs()

@@ -4,7 +4,7 @@ from glob import glob
 import numpy as np
 import pandas as pd
 
-DATA_DIR = "ball_on_plate/data"
+DATA_DIR = "ball_on_plate/data/raw_data"
 
 STATE_COLS = [
     "x",

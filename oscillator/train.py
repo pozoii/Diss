@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
 from oscillator.data.data_preprocessing import OscillatorDataset
+from oscillator.dynamics.harmonic_oscillator_dynamics import HarmonicOscillatorDynamics
 import numpy as np
 import pandas as pd
 import wandb
@@ -72,8 +73,8 @@ class HarmonicOscillatorDynamics(nn.Module):
 
         xddot = (u - self.k*x)/self.m
 
-        x_next = x + self.dt*xdot
         xdot_next = xdot + self.dt*xddot
+        x_next = x + self.dt*xdot_next
 
         
         next_state = torch.stack([x_next,xdot_next,],dim=1)

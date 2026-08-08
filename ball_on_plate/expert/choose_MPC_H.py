@@ -18,7 +18,7 @@ def main():
 
     start_time = time.perf_counter()
 
-    df = run_ExpertMPC(H=H,episodes=5,max_steps=5000)
+    df = run_ExpertMPC(H=H,episodes=25,max_steps=5000)
 
     total_time = time.perf_counter() - start_time
     df["computation_time"] = total_time

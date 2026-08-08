@@ -33,7 +33,7 @@ class BallPDController:
 controller = BallPDController(kp=2,kd=4,max_torque=10.0)   
 
 
-def learn_plate_dynamics(num_episodes=500,max_steps=5000):
+def learn_plate_dynamics(num_episodes=100,max_steps=5000):
 
     env = BallOnPlateEnv(render_mode=None,ball=True)
     records=[]
